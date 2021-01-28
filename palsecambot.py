@@ -1,11 +1,14 @@
 import telebot
-from threading import Thread, Event
+from threading import Thread, Event, RLock
 import logging
 from random import randrange, getrandbits, random
+
+logging.basicConfig()
 
 bot = telebot.TeleBot('your_token')
 
 # (message_id, is_advanced)
+chats_lock = RLock()
 chats = {}
 WIDTH = 36
 HEIGHT=12
@@ -78,26 +81,29 @@ def toggleText(toggle):
 @bot.message_handler(commands=['start'])
 def start(message):
     new_message = bot.send_message(message.chat.id, toggleText(True), parse_mode='Markdown')
-    chats[message.chat.id] = (new_message.message_id, False)
+    with chats_lock:
+        chats[message.chat.id] = (new_message.message_id, False)
 
 @bot.message_handler(commands=['start_advanced'])
 def start_advanced(message):
     new_message = bot.send_message(message.chat.id, randomScreen(), parse_mode='Markdown')
-    chats[message.chat.id] = (new_message.message_id, True)
+    with chats_lock:
+        chats[message.chat.id] = (new_message.message_id, True)
 
 @bot.message_handler(commands=['stop'])
 def stop(message):
     chat_id = message.chat.id
-    if chat_id in chats.keys():
-        message_id, is_advanced = chats[chat_id]
-        del chats[chat_id]
+    with chats_lock:
+        if chat_id in chats.keys():
+            message_id, is_advanced = chats[chat_id]
+            del chats[chat_id]
 
-        message_text = '`■`'
-        if is_advanced:
-            bg = randomBackground()
-            bg[1][3] = '■'
-            message_text = "```\n" + "\n".join(["".join(line) for line in bg]) + "\n```"
-        bot.edit_message_text(message_text, chat_id, message_id, parse_mode='Markdown')
+            message_text = '`■`'
+            if is_advanced:
+                bg = randomBackground()
+                bg[1][3] = '■'
+                message_text = "```\n" + "\n".join(["".join(line) for line in bg]) + "\n```"
+            bot.edit_message_text(message_text, chat_id, message_id, parse_mode='Markdown')
 
 class EditThread(Thread):
     def __init__(self):
@@ -109,16 +115,17 @@ class EditThread(Thread):
         while not self.timer.wait(1):
             self.toggle = not self.toggle
             new_text = toggleText(self.toggle)
-            for chat_id, tup in chats.items():
-                message_id, is_advanced = tup
-                message_text = new_text
-                if is_advanced:
-                    message_text = randomScreen()
-                try:
-                    bot.edit_message_text(message_text, chat_id, message_id, parse_mode='Markdown')
-                except telebot.apihelper.ApiException as ex:
-                    logging.error(ex)
-                    self.timer.wait(60)
+            with chats_lock:
+                for chat_id, tup in chats.items():
+                    message_id, is_advanced = tup
+                    message_text = new_text
+                    if is_advanced:
+                        message_text = randomScreen()
+                    try:
+                        bot.edit_message_text(message_text, chat_id, message_id, parse_mode='Markdown')
+                    except telebot.apihelper.ApiException as ex:
+                        logging.error(ex)
+                        self.timer.wait(60)
 
 thread = EditThread()
 thread.start()
