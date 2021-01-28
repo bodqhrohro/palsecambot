@@ -124,8 +124,10 @@ class EditThread(Thread):
                     try:
                         bot.edit_message_text(message_text, chat_id, message_id, parse_mode='Markdown')
                     except telebot.apihelper.ApiException as ex:
-                        logging.error(ex)
-                        self.timer.wait(60)
+                        # 400 should be a same-content warning, ignore it
+                        if ex.result.status_code != 400:
+                            logging.error(ex)
+                            self.timer.wait(60)
 
 thread = EditThread()
 thread.start()
