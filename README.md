@@ -1,3 +1,3 @@
 Source of https://t.me/palsecambot
 
-![demonstration](palsecambot1.gif)
+![demonstration](palsecambot1_secam.gif)
